@@ -1,0 +1,47 @@
+/* Grundlegende Styles */
+body, html {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+}
+
+header, section, footer {
+    text-align: center;
+    padding: 20px;
+}
+
+nav ul {
+    list-style: none;
+    padding: 0;
+}
+
+nav ul li {
+    display: inline;
+    margin-right: 10px;
+}
+
+a {
+    text-decoration: none;
+    color: navy;
+}
+
+/* Spezielle Sektions-Styles */
+#services .service {
+    border: 1px solid gray;
+    margin: 10px;
+    padding: 10px;
+    display: inline-block;
+    width: 30%;
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+    nav ul li {
+        display: block;
+        margin-bottom: 10px;
+    }
+
+    #services .service {
+        width: 100%;
+    }
+}
