@@ -5,14 +5,30 @@
 <title>Scanner API Interface</title>
 <style>
     body {
-        font-family: Arial, sans-serif;
-        margin: 20px;
+    font-family: Arial, sans-serif;
+    margin: 20px;
     }
+
+    button {
+        margin-right: 10px;
+    }
+
+    .loading {
+        display: none;
+        font-weight: bold;
+        margin-top: 20px;
+    }
+
+    #scansResult {
+        margin-top: 20px; /* Fügt Abstand zwischen den Schaltflächen und den Ergebnissen hinzu */
+    }
+
     .tables-container {
         display: flex;
         flex-wrap: wrap;
         gap: 20px;
     }
+
     .table-wrapper {
         border: 1px solid #ccc;
         border-radius: 8px;
@@ -22,31 +38,57 @@
         margin: 10px;
         min-width: 600px;
     }
+
+    .event-container {
+        border: 2px solid #aaa;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        background-color: #f2f2f2;
+    }
+
+    details summary {
+        background-color: #f2f2f2;
+        padding: 10px;
+        border: 1px solid #ddd;
+        cursor: pointer;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        border-radius: 10px;
+    }
+
     table {
         border-collapse: collapse;
         width: 100%;
         margin-top: 10px;
     }
+
     th, td {
         border: 1px solid #ddd;
         padding: 8px;
         text-align: left;
         white-space: nowrap;
     }
+
     th {
         background-color: #f2f2f2;
     }
+
     h2, h3 {
         margin: 10px 0;
     }
+
     h2 {
         border-bottom: 2px solid #ccc;
         padding-bottom: 5px;
     }
-    .loading {
-        display: none;
+
+    .summary-info {
+        margin-top: 10px;
         font-weight: bold;
-        margin-top: 20px;
+        background-color: #e8e8e8;
+        padding: 5px;
+        border-radius: 5px;
     }
 </style>
 </head>
@@ -60,8 +102,9 @@
 <br><br>
 <button onclick="fetchScansPaginated()">Scans abrufen</button>
 <button onclick="exportToCSV()">Exportieren als CSV</button>
+<button onclick="exportFilteredToCSV()">Exportiere gefilterte Ergebnisse als CSV</button>
 <div class="loading" id="loading">Laden...</div>
-<div id="scansResult" class="tables-container"></div>
+<div id="scansResult"></div>
 
 <script>
 let allScans = [];
@@ -69,6 +112,8 @@ let totalScans = 0;
 const limit = 1000;
 let currentPage = 0;
 const itemsPerPage = 50;
+let scannerMapping = {};  // Hier werden die Zuordnungen gespeichert
+let scannerCounter = 1;  // Kassen-Zähler
 
 async function fetchScans(skip = 0) {
     const apiKey = document.getElementById('apiKey').value;
@@ -129,7 +174,7 @@ async function fetchEventNames() {
 
     for (const eventId of uniqueEventIds) {
         try {
-            const response = await fetch(`https://portier.vivenu.com/api/events/${eventId}`, {
+            const response = await fetch(`https://vivenu.com/api/events/${eventId}`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${apiKey}`
@@ -177,16 +222,43 @@ function displayScans(maxScans) {
             scansByEventAndDevice[scan.eventId][scan.deviceId] = [];
         }
         scansByEventAndDevice[scan.eventId][scan.deviceId].push(scan);
+
+        // Prüfen, ob der Scanner bereits eine Kassen-Nummer hat
+        if (!scannerMapping[scan.deviceId]) {
+            scannerMapping[scan.deviceId] = `Kasse ${scannerCounter++} (${scan.deviceId})`;
+        }
     });
 
     let html = '';
     for (const eventId in scansByEventAndDevice) {
-        html += `<h2>Event: ${scansByEventAndDevice[eventId][Object.keys(scansByEventAndDevice[eventId])[0]][0].eventName} (ID: ${eventId})</h2>`;
+        html += `<div class="event-container">`;
+        html += `<details>
+                    <summary>Event: ${scansByEventAndDevice[eventId][Object.keys(scansByEventAndDevice[eventId])[0]][0].eventName} (ID: ${eventId})</summary>`;
         html += '<div class="tables-container">';
         for (const deviceId in scansByEventAndDevice[eventId]) {
-            html += `<div class="table-wrapper"><h3>Scanner ID: ${deviceId}</h3>`;
-            html += '<table><tr><th>Ticket ID</th><th>Barcode</th><th>Ticket Type ID</th><th>Type</th><th>Scan Result</th><th>Time</th></tr>';
-            scansByEventAndDevice[eventId][deviceId].forEach(scan => {
+            const scans = scansByEventAndDevice[eventId][deviceId];
+            const totalScans = scans.length;
+            const successfulScans = scans.filter(scan => scan.scanResult === 'approved').length;
+            const failedScans = scans.filter(scan => scan.scanResult !== 'approved').length;
+
+            html += `<div class="table-wrapper">
+                        <details>
+                            <summary>${scannerMapping[deviceId]}
+                                <div class="summary-info">
+                                    Gesamt: ${totalScans}, Erfolgreich: ${successfulScans}, Fehlgeschlagen: ${failedScans}
+                                </div>
+                            </summary>
+                            <table>
+                                <tr>
+                                    <th>Ticket ID</th>
+                                    <th>Barcode</th>
+                                    <th>Ticket Type ID</th>
+                                    <th>Type</th>
+                                    <th>Scan Result</th>
+                                    <th>Time</th>
+                                </tr>`;
+
+            scans.forEach(scan => {
                 html += `<tr>
                             <td>${scan.ticketId}</td>
                             <td>${scan.barcode}</td>
@@ -196,9 +268,13 @@ function displayScans(maxScans) {
                             <td>${scan.time}</td>
                         </tr>`;
             });
-            html += '</table></div>';
+
+            html += `       </table>
+                        </details>
+                    </div>`;
         }
         html += '</div>';
+        html += `</details></div>`; // End of event-container
     }
     html += `<p>Total Scans: ${Math.min(totalScans, maxScans)}</p>`;
     document.getElementById('scansResult').innerHTML = html;
@@ -216,6 +292,24 @@ function exportToCSV() {
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
     link.setAttribute("download", "scans.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function exportFilteredToCSV() {
+    const maxScans = parseInt(document.getElementById('maxScans').value);
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Event Name,Event ID,Ticket ID,Barcode,Ticket Type ID,Type,Scan Result,Time\n";
+
+    allScans.slice(0, maxScans).forEach(scan => {
+        csvContent += `${scan.eventName},${scan.eventId},${scan.ticketId},${scan.barcode},${scan.ticketTypeId},${scan.type},${scan.scanResult},${scan.time}\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "filtered_scans.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
